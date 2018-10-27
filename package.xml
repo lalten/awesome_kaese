@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>awesome_kaese</name>
+  <version>0.0.0</version>
+  <description>The awesome_kaese package</description>
+
+  <maintainer email="hackathon@laure.nz">Laurenz Altenmueller</maintainer>
+
+  <author email="hackathon@laure.nz">Laurenz Altenmueller</author>
+
+  <license>MIT</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <depend>geometry_msgs</depend>
+  <depend>rospy</depend>
+
+  <!-- The export tag contains other, unspecified, tags -->
+  <export>
+    <!-- Other tools can request additional information be placed here -->
+
+  </export>
+</package>
