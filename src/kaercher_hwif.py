@@ -25,6 +25,8 @@ class Hwif:
         self.tinkerforge_host = rospy.get_param('~tinkerforge_host', 'localhost')
         self.tinkerforge_port = rospy.get_param('~tinkerforge_port', 4223)
 
+        self.controller_p = rospy.get_param('~controller_p', 50.0)
+
         self.actual_steering = 0
 
         self.sub = rospy.Subscriber(self.input_topic, Twist, self.cmd_vel_callback, queue_size=10)
@@ -93,14 +95,12 @@ class Hwif:
         # rospy.loginfo('got {}mV --> lin {}, steer {}'.format(millivolt, lin, self.actual_steering))
 
     def controller_timer_callback(self, e):
-        # simple bang-bang:
-        if self.actual_steering > self.steering_setpoint:
-            self.stepper_left.set_steps(1)
-            self.stepper_right.set_steps(1)
-        if self.actual_steering < self.steering_setpoint:
-            self.stepper_left.set_steps(-1)
-            self.stepper_right.set_steps(-1)
-        # rospy.loginfo('actual: {}, setpoint: {}'.format(self.actual_steering, self.steering_setpoint))
+        self.controller_p = rospy.get_param('~controller_p', 50.0)
+        err = self.actual_steering - self.steering_setpoint
+        steps = self.controller_p * err
+        self.stepper_left.set_steps(steps)
+        self.stepper_right.set_steps(steps)
+        rospy.loginfo('actual: {}, setpoint: {}'.format(self.actual_steering, self.steering_setpoint))
 
 
 if __name__ == '__main__':
