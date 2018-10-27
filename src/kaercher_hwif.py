@@ -14,11 +14,13 @@ import numpy as np
 import rospy
 
 from geometry_msgs.msg import Twist
+from std_msgs.msg import Bool
 
 
 class Hwif:
     def __init__(self):
         self.input_topic = rospy.get_param('~input_topic', '/cmd_vel')
+        self.override_topic = rospy.get_param('~override_topic', '/override')
         self.analog_out_UID = rospy.get_param('~tinkerforge_analog_out_UID', 'Boq')
         self.relay_UID = rospy.get_param('~tinkerforge_relay_UID', 'FMY')
         self.stepper_left_UID = rospy.get_param('~tinkerforge_stepper_left_UID', '6QEPuu')
@@ -34,6 +36,8 @@ class Hwif:
         self.actual_steering = 0
 
         self.sub = rospy.Subscriber(self.input_topic, Twist, self.cmd_vel_callback, queue_size=10)
+        self.sub_override = rospy.Subscriber(self.override_topic, Bool, self.override_callback, queue_size=10)
+        self.override = False
 
         self.ipcon = IPConnection()  # Create IP connection
         self.ao = BrickletAnalogOutV2(self.analog_out_UID, self.ipcon)
@@ -72,6 +76,10 @@ class Hwif:
 
         self.controller_timer = rospy.Timer(period=rospy.Duration(1/200.0), callback=self.controller_timer_callback)
 
+    def override_callback(self, msg):
+        self.override = msg.data
+        self.ao.set_output_voltage(0)
+
     @staticmethod
     def valmap(ivalue, istart, istop, ostart, ostop):
         """
@@ -86,6 +94,11 @@ class Hwif:
         return ostart + (ostop - ostart) * ((ivalue - istart) / (istop - istart))
 
     def cmd_vel_callback(self, cmd_vel_msg):
+        # stop on override
+        if self.override:
+            self.ao.set_output_voltage(0)
+            return
+
         # extract steering angle and forward speed from msg
         self.steering_setpoint = cmd_vel_msg.angular.z
         speed = cmd_vel_msg.linear.x
@@ -128,6 +141,8 @@ class Hwif:
         self.controller_p = rospy.get_param('~controller_p', 50.0)
         err = self.actual_steering - self.steering_setpoint
         steps = self.controller_p * err
+        if self.override:
+            steps = 0
         self.stepper_left.set_steps(steps)
         self.stepper_right.set_steps(steps)
         # rospy.loginfo('actual: {}, setpoint: {}'.format(self.actual_steering, self.steering_setpoint))
