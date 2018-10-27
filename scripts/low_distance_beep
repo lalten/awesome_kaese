@@ -13,7 +13,7 @@ from geometry_msgs.msg import Point
 import sensor_msgs.point_cloud2 as pc2
 from visualization_msgs.msg import Marker
 from laser_geometry import LaserProjection
-sgs.msg import ColorRGBA, Bool
+from std_msgs.msg import ColorRGBA, Bool
 
 class KaeseLowDistanceWarner:
 
