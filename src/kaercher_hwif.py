@@ -100,8 +100,16 @@ class Hwif:
             return
 
         # extract steering angle and forward speed from msg
-        self.steering_setpoint = cmd_vel_msg.angular.z
+        angle = cmd_vel_msg.angular.z
         speed = cmd_vel_msg.linear.x
+
+        # simplify angle setpoint to left/middle/right
+        if angle > 0.1:
+            self.steering_setpoint = np.log(200)
+        elif angle < -0.1:
+            self.steering_setpoint = np.log(70)
+        else:
+            self.steering_setpoint = np.log(105)
 
         # If speed is not zero, activate gas pedal switch
         if np.abs(speed) > self.deadzone:
@@ -135,7 +143,7 @@ class Hwif:
     def steering_callback(self, millivolt):
         lin = np.log(millivolt)
         self.actual_steering = self.valmap(lin, np.log(70), np.log(200), -1.0, 1.0)
-        rospy.loginfo('got {}mV --> lin {}, steer {}'.format(millivolt, lin, self.actual_steering))
+        # rospy.loginfo('got {}mV --> lin {}, steer {}'.format(millivolt, lin, self.actual_steering))
 
     def controller_timer_callback(self, e):
         self.controller_p = rospy.get_param('~controller_p', 50.0)
