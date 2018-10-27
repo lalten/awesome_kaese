@@ -48,11 +48,11 @@ class Joy:
             x, y = self.joy.get_position()
             pressed = self.joy.is_pressed()
 
-            if not pressed:
-                cmd_vel.linear.x = 0
-            else:
-                cmd_vel.linear.x = self.valmap(y, 100, -100, -1, 1)
-                cmd_vel.angular.z = self.valmap(x, -100, 100, -1, 1)
+            # if not pressed:
+            #     cmd_vel.linear.x = 0
+            # else:
+            cmd_vel.linear.x = self.valmap(y, 100, -100, -1, 1)
+            cmd_vel.angular.z = self.valmap(x, -100, 100, -1, 1)
 
             self.pub.publish(cmd_vel)
 
