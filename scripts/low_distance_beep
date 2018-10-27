@@ -1,24 +1,29 @@
 #! /usr/bin/python
 
+
+import os
+import time
+import numpy as np
+from serial import Serial
+
+# ROS-specific Includes
 import rospy
 from sensor_msgs.msg import LaserScan, PointCloud2
 from geometry_msgs.msg import Point
 import sensor_msgs.point_cloud2 as pc2
-import os
-import time
 from visualization_msgs.msg import Marker
-import numpy as np
 from laser_geometry import LaserProjection
 from std_msgs.msg import ColorRGBA
-from serial import Serial
+
 
 class KaeseLowDistanceWarner:
 
     warn_distance_front = 1.5
     danger_distance_front = 1.0
-    # warn_distance_side = 0.2
     front_width = 0.5
     dead_zone = 0.1
+
+    # password will be changed by Kaercher after the hackathon ;)
     ssh_cmd = "sshpass -p 'NBcejYzF' ssh root@192.168.100.99 "
 
     def __init__(self):
@@ -28,16 +33,17 @@ class KaeseLowDistanceWarner:
 
         self.pub_too_close = rospy.Publisher("too_close", Marker, queue_size=1)
 
-        self.serial = Serial("/dev/ttyACM0", 115200)
+        # add a udev-rule to make sure that the arduino has a fixed name
+        # /etc/udev/rules.d/90-arduino.rules
+        # SUBSYSTEMS=="usb",  ATTRS{idProduct}=="0043", ATTRS{idVendor}=="2341", SYMLINK+="uno"
+
+        self.serial = Serial("/dev/uno", 115200)
         rospy.sleep(1.0)
         print self.serial
 
         self.sub_scan = rospy.Subscriber("/scan", LaserScan, self.scan_cb, queue_size=1)
         rospy.loginfo("Connection established and initialized")
-
         self.led_ok()
-        # self.last_to_close_time = rospy.Time(0)
-        # self.min_beep_delay
 
     def led_ok(self):
         self.serial.write('g')
@@ -46,24 +52,23 @@ class KaeseLowDistanceWarner:
         self.serial.write('w')
 
     def led_danger(self):
-        rospy.loginfo("DANGER TO LED")
         self.serial.write("d\n")
-        # self.serial.flush()
-        # print self.serial.readline()
 
     def scan_cb(self, scan):
-        print "data"
+        rospy.logdebug("Received laser scan message")
         assert isinstance(scan, LaserScan)
+
+        # convert from polar to cartesian coordinates
         lp = LaserProjection()
         cloud = lp.projectLaser(scan)
         assert isinstance(cloud, PointCloud2)
 
+        # marker shows objects in warn and danger area
         m = Marker()
         m.type = m.POINTS
-        m.ns = "too close"
+        m.ns = "too_close"
         m.pose.orientation.w = 1
         m.header = scan.header
-        m.id = 0
         m.scale.x = m.scale.y = m.scale.z = 0.1
 
         warn_color = ColorRGBA()
@@ -79,9 +84,6 @@ class KaeseLowDistanceWarner:
         for p in pc2.read_points(cloud, field_names=("x", "y", "z"), skip_nans=False):
             pts.append((p[0], p[1], p[2]))
 
-        # print scan.ranges
-        # too_close = any([r < self.warn_distance for r in scan.ranges])
-
         pnt_cnt_danger = 0
         pnt_cnt_warn = 0
 
@@ -89,11 +91,8 @@ class KaeseLowDistanceWarner:
             r = np.linalg.norm(p)
 
             too_close = False
-
             if abs(p[1]) < self.front_width:
-
                 x = p[0]
-
                 if x < self.danger_distance_front:
                     m.colors.append(danger_color)
                     pnt_cnt_danger += 1
@@ -113,7 +112,6 @@ class KaeseLowDistanceWarner:
                 m.points.append(gp)
 
         if pnt_cnt_danger > 5:
-            rospy.logerr("DANGER")
             self.led_danger()
         else:
             if pnt_cnt_warn > 5:
@@ -121,13 +119,7 @@ class KaeseLowDistanceWarner:
             else:
                 self.led_ok()
 
-
         self.pub_too_close.publish(m)
-
-        # if too_close:
-        #     rospy.logwarn("too close")
-        #     self.short_beep()
-            # self.sub_scan.unregister()
 
     def rolling_mill(self, on=False):
         cmd = 1 if on else 2
@@ -144,7 +136,6 @@ class KaeseLowDistanceWarner:
         cmd = self.ssh_cmd + self.comdiag_suffix(cmd)
         print cmd
         print os.system(cmd)
-
 
     def short_beep(self, duration=0.2):
         cmd = self.ssh_cmd + self.comdiag_suffix(26)[:-1] + ('&& sleep %.2f && ' % duration) + self.comdiag_suffix(27)[1:]
