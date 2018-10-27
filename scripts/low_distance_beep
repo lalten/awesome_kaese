@@ -13,8 +13,7 @@ from geometry_msgs.msg import Point
 import sensor_msgs.point_cloud2 as pc2
 from visualization_msgs.msg import Marker
 from laser_geometry import LaserProjection
-from std_msgs.msg import ColorRGBA
-
+sgs.msg import ColorRGBA, Bool
 
 class KaeseLowDistanceWarner:
 
@@ -42,6 +41,8 @@ class KaeseLowDistanceWarner:
         print self.serial
 
         self.sub_scan = rospy.Subscriber("/scan", LaserScan, self.scan_cb, queue_size=1)
+        self.pub_emergency_stop = rospy.Publisher("/override", Bool, queue_size=1)
+
         rospy.loginfo("Connection established and initialized")
         self.led_ok()
 
@@ -52,7 +53,9 @@ class KaeseLowDistanceWarner:
         self.serial.write('w')
 
     def led_danger(self):
+        rospy.logwarn("STOPPING")
         self.serial.write("d\n")
+        self.pub_emergency_stop.publish(True)
 
     def scan_cb(self, scan):
         rospy.logdebug("Received laser scan message")
