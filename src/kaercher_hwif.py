@@ -32,12 +32,16 @@ class Hwif:
         self.ipcon = IPConnection()  # Create IP connection
         self.ao = BrickletAnalogOutV2(self.analog_out_UID, self.ipcon)
         self.ai = BrickletAnalogInV3(self.analog_in_UID, self.ipcon)
-        self.ipcon.connect(self.tinkerforge_host, self.tinkerforge_port)
-
         self.stepper_left = BrickSilentStepper(self.stepper_left_UID, self.ipcon)
         self.stepper_right = BrickSilentStepper(self.stepper_right_UID, self.ipcon)
+        self.ai.register_callback(self.ai.CALLBACK_VOLTAGE, self.steering_callback)
 
-        self.steering_wheel_angle = 0
+        self.ipcon.connect(self.tinkerforge_host, self.tinkerforge_port)
+
+        self.ai.set_voltage_callback_configuration(50, False, "x", 0, 0)
+
+        self.actual_steering = 0
+        self.steering_setpoint = 0
 
         self.stepper_motor_current = 800
         self.stepper_max_velocity = 2000
@@ -56,8 +60,7 @@ class Hwif:
         self.stepper_right.set_speed_ramping(self.stepper_speed_ramping_accel, self.stepper_speed_ramping_deaccel)
         self.stepper_right.enable()
 
-        self.ai.register_callback(self.ai.CALLBACK_VOLTAGE, self.steering_callback)
-        self.ai.set_voltage_callback_configuration(50, False, "x", 0, 0)
+        self.controller_timer = rospy.Timer(period=rospy.Duration(1/200.0), callback=self.controller_timer_callback)
 
     @staticmethod
     def valmap(ivalue, istart, istop, ostart, ostop):
@@ -82,10 +85,22 @@ class Hwif:
         self.ao.set_output_voltage(speed)
         # rospy.loginfo('sent {}'.format(speed))
 
+        self.steering_setpoint = cmd_vel_msg.angular.z
+
     def steering_callback(self, millivolt):
         lin = np.log(millivolt)
         self.actual_steering = self.valmap(lin, np.log(70), np.log(250), -1.0, 1.0)
         # rospy.loginfo('got {}mV --> lin {}, steer {}'.format(millivolt, lin, self.actual_steering))
+
+    def controller_timer_callback(self, e):
+        # simple bang-bang:
+        if self.actual_steering > self.steering_setpoint:
+            self.stepper_left.set_steps(1)
+            self.stepper_right.set_steps(1)
+        if self.actual_steering < self.steering_setpoint:
+            self.stepper_left.set_steps(-1)
+            self.stepper_right.set_steps(-1)
+        # rospy.loginfo('actual: {}, setpoint: {}'.format(self.actual_steering, self.steering_setpoint))
 
 
 if __name__ == '__main__':
