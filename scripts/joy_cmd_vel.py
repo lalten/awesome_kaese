@@ -13,7 +13,7 @@ import rospy
 from geometry_msgs.msg import Twist
 
 
-class Hwif:
+class Joy:
     def __init__(self):
         self.output_topic = rospy.get_param('~output_topic', '/cmd_vel')
         self.joy_UID = rospy.get_param('~tinkerforge_joy_UID', 'waz')
@@ -58,6 +58,6 @@ class Hwif:
 
 
 if __name__ == '__main__':
-    rospy.init_node('kaercher_hwif')
-    n = Hwif()
+    rospy.init_node('kaercher_joy')
+    n = Joy()
     n.run()
