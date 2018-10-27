@@ -1,0 +1,167 @@
+#! /usr/bin/python
+
+import rospy
+from sensor_msgs.msg import LaserScan, PointCloud2
+from geometry_msgs.msg import Point
+import sensor_msgs.point_cloud2 as pc2
+import os
+import time
+from visualization_msgs.msg import Marker
+import numpy as np
+from laser_geometry import LaserProjection
+from std_msgs.msg import ColorRGBA
+from serial import Serial
+
+class KaeseLowDistanceWarner:
+
+    warn_distance_front = 1.5
+    danger_distance_front = 1.0
+    # warn_distance_side = 0.2
+    front_width = 0.5
+    dead_zone = 0.1
+    ssh_cmd = "sshpass -p 'NBcejYzF' ssh root@192.168.100.99 "
+
+    def __init__(self):
+        # self.activate_manual_mode()
+        # self.beep(on=False)
+        # self.rolling_mill(False)
+
+        self.pub_too_close = rospy.Publisher("too_close", Marker, queue_size=1)
+
+        self.serial = Serial("/dev/ttyACM0", 115200)
+        rospy.sleep(1.0)
+        print self.serial
+
+        self.sub_scan = rospy.Subscriber("/scan", LaserScan, self.scan_cb, queue_size=1)
+        rospy.loginfo("Connection established and initialized")
+
+        self.led_ok()
+        # self.last_to_close_time = rospy.Time(0)
+        # self.min_beep_delay
+
+    def led_ok(self):
+        self.serial.write('g')
+
+    def led_warn(self):
+        self.serial.write('w')
+
+    def led_danger(self):
+        rospy.loginfo("DANGER TO LED")
+        self.serial.write("d\n")
+        # self.serial.flush()
+        # print self.serial.readline()
+
+    def scan_cb(self, scan):
+        print "data"
+        assert isinstance(scan, LaserScan)
+        lp = LaserProjection()
+        cloud = lp.projectLaser(scan)
+        assert isinstance(cloud, PointCloud2)
+
+        m = Marker()
+        m.type = m.POINTS
+        m.ns = "too close"
+        m.pose.orientation.w = 1
+        m.header = scan.header
+        m.id = 0
+        m.scale.x = m.scale.y = m.scale.z = 0.1
+
+        warn_color = ColorRGBA()
+        warn_color.a = 1
+        warn_color.r = 1
+        warn_color.g = 1
+
+        danger_color = ColorRGBA()
+        danger_color.a = 1
+        danger_color.r = 1
+
+        pts = list()
+        for p in pc2.read_points(cloud, field_names=("x", "y", "z"), skip_nans=False):
+            pts.append((p[0], p[1], p[2]))
+
+        # print scan.ranges
+        # too_close = any([r < self.warn_distance for r in scan.ranges])
+
+        pnt_cnt_danger = 0
+        pnt_cnt_warn = 0
+
+        for i, p in enumerate(pts):
+            r = np.linalg.norm(p)
+
+            too_close = False
+
+            if abs(p[1]) < self.front_width:
+
+                x = p[0]
+
+                if x < self.danger_distance_front:
+                    m.colors.append(danger_color)
+                    pnt_cnt_danger += 1
+                else:
+                    if x < self.warn_distance_front:
+                        pnt_cnt_warn += 1
+                        m.colors.append(warn_color)
+
+                # object is in front of robot:
+                too_close = x < self.warn_distance_front
+
+            if too_close:
+                gp = Point()
+                gp.x = p[0]
+                gp.y = p[1]
+                gp.z = p[2]
+                m.points.append(gp)
+
+        if pnt_cnt_danger > 5:
+            rospy.logerr("DANGER")
+            self.led_danger()
+        else:
+            if pnt_cnt_warn > 5:
+                self.led_warn()
+            else:
+                self.led_ok()
+
+
+        self.pub_too_close.publish(m)
+
+        # if too_close:
+        #     rospy.logwarn("too close")
+        #     self.short_beep()
+            # self.sub_scan.unregister()
+
+    def rolling_mill(self, on=False):
+        cmd = 1 if on else 2
+        self.send_comdiag(cmd)
+
+    def beep(self, on=False):
+        cmd = 26 if on else 27
+        self.send_comdiag(cmd)
+
+    def comdiag_suffix(self, cmd):
+        return """'/usr/local/bin/tcuclient -c "var write commdiag.output.1.u8 %i" '""" % cmd
+
+    def send_comdiag(self, cmd):
+        cmd = self.ssh_cmd + self.comdiag_suffix(cmd)
+        print cmd
+        print os.system(cmd)
+
+
+    def short_beep(self, duration=0.2):
+        cmd = self.ssh_cmd + self.comdiag_suffix(26)[:-1] + ('&& sleep %.2f && ' % duration) + self.comdiag_suffix(27)[1:]
+        print cmd
+        os.system(cmd)
+
+    def activate_manual_mode(self):
+        print("activating manual mode")
+        cmd = self.ssh_cmd + """ '/usr/local/bin/tcuclient -c "var write commdiag.machineMode 6" '"""
+        print os.system(cmd)
+
+
+if __name__ ==  "__main__":
+    rospy.init_node("low_distance_warner")
+    kldw = KaeseLowDistanceWarner()
+
+    # kldw.short_beep(duration=0.3)
+    # kldw.short_beep(duration=0.3)
+
+    rospy.spin()
