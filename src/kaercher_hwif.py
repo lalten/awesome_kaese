@@ -5,6 +5,7 @@ from __future__ import division
 
 from tinkerforge.ip_connection import IPConnection
 from tinkerforge.bricklet_analog_out_v2 import BrickletAnalogOutV2
+from tinkerforge.brick_silent_stepper import BrickSilentStepper
 
 import rospy
 
@@ -15,6 +16,8 @@ class Hwif:
     def __init__(self):
         self.input_topic = rospy.get_param('~input_topic', '/cmd_vel')
         self.analog_out_UID = rospy.get_param('~tinkerforge_analog_out_UID', 'Boq')
+        self.stepper_left_UID = rospy.get_param('~tinkerforge_stepper_left_UID', '6QEPuu')
+        self.stepper_right_UID = rospy.get_param('~tinkerforge_stepper_right_UID', '6rnvVj')
         self.tinkerforge_host = rospy.get_param('~tinkerforge_host', 'localhost')
         self.tinkerforge_port = rospy.get_param('~tinkerforge_port', 4223)
 
@@ -23,6 +26,27 @@ class Hwif:
         self.ipcon = IPConnection()  # Create IP connection
         self.ao = BrickletAnalogOutV2(self.analog_out_UID, self.ipcon)
         self.ipcon.connect(self.tinkerforge_host, self.tinkerforge_port)
+        self.stepper_left = BrickSilentStepper(self.stepper_left_UID, self.ipcon)
+        self.stepper_right = BrickSilentStepper(self.stepper_right_UID, self.ipcon)
+
+        self.steering_wheel_angle = 0
+
+        self.stepper_motor_current = 800
+        self.stepper_max_velocity = 2000
+        self.stepper_speed_ramping_accel = 0
+        self.stepper_speed_ramping_deaccel = 0
+
+        self.stepper_left.set_motor_current(self.stepper_motor_current) # 800mA
+        self.stepper_left.set_step_configuration(self.stepper_left.STEP_RESOLUTION_8, True) # 1/8 steps (interpolated)
+        self.stepper_left.set_max_velocity(self.stepper_max_velocity)
+        self.stepper_left.set_speed_ramping(self.stepper_speed_ramping_accel, self.stepper_speed_ramping_deaccel)
+        self.stepper_left.enable()
+
+        self.stepper_right.set_motor_current(self.stepper_motor_current) # 800mA
+        self.stepper_right.set_step_configuration(self.stepper_right.STEP_RESOLUTION_8, True) # 1/8 steps (interpolated)
+        self.stepper_right.set_max_velocity(self.stepper_max_velocity)
+        self.stepper_right.set_speed_ramping(self.stepper_speed_ramping_accel, self.stepper_speed_ramping_deaccel)
+        self.stepper_right.enable()
 
     @staticmethod
     def valmap(ivalue, istart, istop, ostart, ostop):
@@ -46,6 +70,8 @@ class Hwif:
         speed = self.valmap(speed, 0, 1, 0, 3300)  # convert to mV Potentiometer emulation
         self.ao.set_output_voltage(speed)
         rospy.loginfo('sent {}'.format(speed))
+
+        
 
 
 if __name__ == '__main__':
