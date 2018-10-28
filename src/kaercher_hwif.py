@@ -100,16 +100,8 @@ class Hwif:
             return
 
         # extract steering angle and forward speed from msg
-        angle = cmd_vel_msg.angular.z
+        self.steering_setpoint = cmd_vel_msg.angular.z
         speed = cmd_vel_msg.linear.x
-
-        # simplify angle setpoint to left/middle/right
-        if angle > 0.1:
-            self.steering_setpoint = np.log(200)
-        elif angle < -0.1:
-            self.steering_setpoint = np.log(70)
-        else:
-            self.steering_setpoint = np.log(105)
 
         # If speed is not zero, activate gas pedal switch
         if np.abs(speed) > self.deadzone:
