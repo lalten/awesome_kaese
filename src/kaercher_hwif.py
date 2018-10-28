@@ -97,6 +97,7 @@ class Hwif:
         # stop on override
         if self.override:
             self.ao.set_output_voltage(0)
+            self.idr.set_selected_value(0, False)
             return
 
         # extract steering angle and forward speed from msg
