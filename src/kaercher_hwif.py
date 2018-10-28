@@ -139,6 +139,12 @@ class Hwif:
         # rospy.loginfo('got {}mV --> lin {}, steer {}'.format(millivolt, lin, self.actual_steering))
 
     def controller_timer_callback(self, e):
+
+        # stop on override
+        if self.override:
+            self.ao.set_output_voltage(0)
+            self.idr.set_selected_value(0, False)
+
         self.controller_p = rospy.get_param('~controller_p', 50.0)
         err = self.actual_steering - self.steering_setpoint
         steps = self.controller_p * err
